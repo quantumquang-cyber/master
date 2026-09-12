@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>RANSOM</title>
+<style>
+@font-face{font-family:RM;src:url("assets/RobotoMono-VariableFont_wght.ttf")}
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000}
+body{font-family:RM,monospace;cursor:crosshair}
+#stage{position:fixed;inset:0;background:#000;overflow:hidden}
+#red{position:absolute;inset:0;background:#3d0000;display:none;z-index:10}
+#face,#stop,#down,#note,#glitches,#coins,#thank{position:absolute}
+#face{left:50%;top:50%;transform:translate(-50%,-50%);display:none;z-index:30}
+#face img{width:min(300px,42vw);height:min(300px,42vw);object-fit:contain}
+#stop{left:50%;top:50%;transform:translate(-50%,-50%);display:none;z-index:40}
+#stop img{width:min(315px,45vw);height:min(315px,45vw)}
+#down{left:50%;top:50%;transform:translate(-50%,-50%);width:min(500px,80vw);display:none;z-index:45;color:#fff;text-align:center}
+#down .label{font-size:clamp(20px,3vw,34px);font-weight:800;letter-spacing:2px}
+#down .segments{height:24px;margin-top:18px;display:grid;grid-template-columns:repeat(12,1fr);gap:3px}
+#down .segments span{background:#fff;animation:seg .36s linear infinite}
+#down .segments span:nth-child(2n){animation-delay:.08s}
+#down .segments span:nth-child(3n){animation-delay:.16s}
+@keyframes seg{0%,100%{opacity:.15}50%{opacity:1}}
+#note{left:50%;top:50%;transform:translate(-50%,-50%);display:none;z-index:60;width:min(945px,76vw);max-height:75vh}
+#note img{display:block;width:100%;height:auto}
+#note .balance{position:absolute;left:12.5%;bottom:6%;font-weight:800;color:#ffe900;font-size:clamp(20px,3vw,42px);text-shadow:2px 2px #000}
+#note .clock{position:absolute;right:7%;bottom:6%;font-weight:800;color:#111;font-size:clamp(20px,3vw,42px);text-shadow:1px 1px #ff3333}
+#frame{position:absolute;inset:-6px;pointer-events:none}
+.dot{position:absolute;width:4px;height:4px;background:#fff;opacity:.62}
+#glitches{inset:0;z-index:50;pointer-events:none}
+.g{position:absolute;width:120px;height:99px;opacity:.9}
+.g img{width:100%;height:100%;display:block}
+.g.fade{animation:gf 5s linear forwards}
+@keyframes gf{0%,70%{opacity:.9}100%{opacity:0}}
+#coins{inset:0;z-index:70;pointer-events:none}
+.coin{position:absolute;width:74px;height:74px;pointer-events:auto;touch-action:none;cursor:grab}
+.coin img{width:100%;height:100%}.coin.drag{cursor:grabbing;z-index:500}
+#thank{left:50%;top:50%;transform:translate(-50%,-50%);display:none;z-index:100;width:min(315px,55vw)}
+#thank img{width:100%;display:block}
+#tap{position:absolute;inset:0;z-index:1000;border:0;background:transparent;color:transparent}
+</style>
+</head>
+<body>
+<div id="stage">
+<div id="red"></div>
+<div id="face"><img id="faceImg" src="assets/ransom_face.png"></div>
+<div id="stop"><img src="assets/stop.png"></div>
+<div id="down"><div class="label">DOWNLOADING</div><div class="segments"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div></div>
+<div id="glitches"></div>
+<div id="note"><img src="assets/ransom_note.png"><div id="frame"></div><div class="balance" id="balance">500</div><div class="clock" id="clock">01:30</div></div>
+<div id="coins"></div>
+<div id="thank"><img src="assets/thank_you.png"></div>
+<button id="tap" aria-label="start"></button>
+</div>
+
+<audio id="faceS" src="sounds/jumpscare2.mp3"></audio>
+<audio id="stopS" src="sounds/jumpscare1.mp3"></audio>
+<audio id="staticS" src="sounds/stop_static.wav"></audio>
+<audio id="attackS" src="sounds/attack.wav"></audio>
+<audio id="coinS" src="sounds/coin.wav"></audio>
+<audio id="musicS" src="sounds/ransom_ost_to_jumpscare.mp3"></audio>
+<audio id="successS" src="sounds/ransom_success.ogg"></audio>
+<script>
+const q=s=>document.querySelector(s), face=q("#face"),faceImg=q("#faceImg"),stop=q("#stop"),
+red=q("#red"),down=q("#down"),note=q("#note"),glitches=q("#glitches"),coins=q("#coins"),
+thank=q("#thank"),balance=q("#balance"),clock=q("#clock"),tap=q("#tap");
+let audioReady=false, stage="idle", timer=null, remaining=90, balanceVal=500, coinNo=0;
+
+function play(id,loop=false,vol=1){
+ const a=q(id);try{a.loop=loop;a.volume=vol;a.currentTime=0;a.play().catch(()=>{});}catch{}
+}
+function stopAudio(id){const a=q(id);try{a.pause();a.currentTime=0}catch{}}
+async function armAudio(){
+ if(audioReady)return; audioReady=true; tap.style.display="none";
+ for(const id of ["#faceS","#stopS","#staticS","#attackS","#coinS","#musicS","#successS"]){
+   const a=q(id);try{a.muted=true;await a.play();a.pause();a.currentTime=0;a.muted=false}catch{}
+ }
+}
+document.addEventListener("pointerdown",armAudio,{capture:true});
+document.addEventListener("keydown",armAudio,{capture:true});
+
+function clearStage(){
+ [face,stop,down,note,thank].forEach(x=>x.style.display="none");
+ red.style.display="none";glitches.innerHTML="";coins.innerHTML="";
+ if(timer){clearInterval(timer);timer=null}
+ stopAudio("#musicS");
+}
+function dots(){
+ const f=q("#frame");f.innerHTML="";
+ const w=note.clientWidth,h=note.clientHeight;
+ for(let x=0;x<w;x+=8){let a=document.createElement("i");a.className="dot";a.style.left=x+"px";a.style.top="0";f.appendChild(a);
+ let b=a.cloneNode();b.style.top=(h-4)+"px";f.appendChild(b)}
+ for(let y=0;y<h;y+=8){let a=document.createElement("i");a.className="dot";a.style.top=y+"px";a.style.left="0";f.appendChild(a);
+ let b=a.cloneNode();b.style.left=(w-4)+"px";f.appendChild(b)}
+}
+function encounter(){
+ stage="face";clearStage();faceImg.src="assets/ransom_face.png";face.style.display="block";play("#faceS");
+ setTimeout(()=>{if(stage==="face")stopPhase()},320+Math.random()*300);
+}
+function stopPhase(){
+ stage="stop";face.style.display="none";red.style.display="block";stop.style.display="block";
+ play("#stopS");play("#staticS");
+ setTimeout(()=>{if(stage==="stop")attackPhase()},400);
+}
+function attackPhase(){
+ stage="attack";stop.style.display="none";faceImg.src="assets/attack_face.png";face.style.display="block";
+ face.style.animation="shake .055s linear infinite";play("#attackS");
+ setTimeout(()=>{face.style.animation="";downloadPhase()},800);
+}
+function downloadPhase(){
+ stage="download";face.style.display="none";down.style.display="block";
+ setTimeout(startRansom,1500);
+}
+function addGlitch(){
+ const files=["glitch_1.png","glitch_2.png","glitch_3.png","glitch_4.png","glitch_5.png","glitch_6.png"];
+ const g=document.createElement("div");g.className="g fade";
+ const im=document.createElement("img");im.src="assets/"+files[Math.floor(Math.random()*files.length)];g.appendChild(im);
+ g.style.left=(Math.random()*84+3)+"%";g.style.top=(Math.random()*78+5)+"%";
+ glitches.appendChild(g);setTimeout(()=>g.remove(),5000);
+}
+function makeCoin(){
+ const c=document.createElement("div");c.className="coin";c.id="coin"+(++coinNo);
+ const im=document.createElement("img");im.src="assets/coin_token.png";c.appendChild(im);
+ c.style.left=(Math.random()*88+4)+"%";c.style.top=(Math.random()*80+8)+"%";
+ let drag=false,ox=0,oy=0;
+ c.addEventListener("pointerdown",e=>{
+   drag=true;c.classList.add("drag");c.setPointerCapture(e.pointerId);
+   const r=c.getBoundingClientRect();ox=e.clientX-r.left;oy=e.clientY-r.top;
+ });
+ c.addEventListener("pointermove",e=>{if(drag){c.style.left=(e.clientX-ox)+"px";c.style.top=(e.clientY-oy)+"px"}});
+ c.addEventListener("pointerup",e=>{
+   if(!drag)return;drag=false;c.classList.remove("drag");
+   const a=c.getBoundingClientRect(),b=note.getBoundingClientRect();
+   if(a.right>b.left&&a.left<b.right&&a.bottom>b.top&&a.top<b.bottom){
+     c.remove();balanceVal=Math.max(0,balanceVal-10);balance.textContent=balanceVal;play("#coinS",false,.32);
+     if(balanceVal===0)success(); else setTimeout(makeCoin,80);
+   }
+ });
+ coins.appendChild(c);
+}
+function startRansom(){
+ stage="ransom";down.style.display="none";red.style.display="block";note.style.display="block";
+ balanceVal=500;balance.textContent=balanceVal;remaining=90;clock.textContent="01:30";dots();
+ for(let i=0;i<8;i++)makeCoin();for(let i=0;i<5;i++)addGlitch();
+ const music=q("#musicS");try{music.currentTime=11.55}catch{}play("#musicS",false,.64);
+ timer=setInterval(()=>{
+   remaining--;const m=String(Math.floor(remaining/60)).padStart(2,"0"),s=String(remaining%60).padStart(2,"0");
+   clock.textContent=m+":"+s;if(remaining<=0)failure();
+ },1000);
+ const gl=setInterval(()=>{if(stage!=="ransom"){clearInterval(gl);return}addGlitch()},1200);
+}
+function success(){
+ if(stage!=="ransom")return;stage="success";clearInterval(timer);coins.innerHTML="";glitches.innerHTML="";note.style.display="none";red.style.display="none";
+ thank.style.display="block";play("#successS");
+ setTimeout(()=>{thank.style.display="none";setTimeout(encounter,1200)},1800);
+}
+function failure(){
+ if(stage!=="ransom")return;stage="failure";clearInterval(timer);coins.innerHTML="";glitches.innerHTML="";note.style.display="none";red.style.display="none";
+ faceImg.src="assets/final_face.png";face.style.display="block";play("#faceS");
+ setTimeout(()=>{clearStage();faceImg.src="assets/ransom_face.png";setTimeout(encounter,900)},800);
+}
+const st=document.createElement("style");st.textContent="@keyframes shake{0%{transform:translate(-50%,-50%) translate(0,0)}25%{transform:translate(-50%,-50%) translate(5px,-3px)}50%{transform:translate(-50%,-50%) translate(-4px,4px)}75%{transform:translate(-50%,-50%) translate(3px,2px)}100%{transform:translate(-50%,-50%) translate(0,0)}}";document.head.appendChild(st);
+setTimeout(encounter,800);
+</script>
+</body>
+</html>
